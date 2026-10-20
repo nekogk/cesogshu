@@ -237,7 +237,6 @@
         el.setAttribute('aria-disabled', String(!playable));
 
         const who = v === null ? '빈 점' : nameOf(v);
-        el.setAttribute('aria-label', `${r + 1}행 ${c + 1}열, ${who}${locked ? ', 잠김' : ''}`);
       }
     }
 

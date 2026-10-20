@@ -258,8 +258,6 @@ body {
   flex: none;
   width: 48px;
   height: 48px;
-  font-size: 2rem;
-  line-height: 100%;
   border-radius: 50%;
   display: grid;
   place-items: center;

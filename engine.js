@@ -253,22 +253,47 @@
     return best;
   }
 
-  // 최선의 수 고르기. history: 지금까지 나온 국면 key 집합, rng: 동점일 때 무작위 선택용
-  function chooseMove(s, w, depth, history, rng = Math.random) {
+  // 약한 랜덤: 최선 수와 점수 차가 margin 이내인 수들 중에서
+  // exp((점수 - 최선) / temperature) 비율로 뽑는다. 이기는 수가 보이면 무조건 그 수.
+  // 평가 점수 감각: 둘 수 있는 점 하나 차이 ≈ 12점
+  const RANDOMNESS = { margin: 4, temperature: 2 };
+
+  // 최선의 수 고르기.
+  //   history: 지금까지 나온 국면 key 집합
+  //   rng: 난수 함수
+  //   opts: 랜덤 정도. { margin: 0 }을 넘기면 랜덤 없이 최선 수만 (동점끼리만 무작위)
+  function chooseMove(s, w, depth, history, rng = Math.random, opts = RANDOMNESS) {
     const moves = genMoves(s);
     if (!moves.length) return null;
     for (let i = moves.length - 1; i > 0; i--) { // 동점 수를 무작위로 고르기 위해 섞음
       const j = Math.floor(rng() * (i + 1)); [moves[i], moves[j]] = [moves[j], moves[i]];
     }
     moves.sort((a, b) => b.cap - a.cap);
+
+    const margin = opts && opts.margin > 0 ? opts.margin : 0;
+    const temp = opts && opts.temperature > 0 ? opts.temperature : 1;
     const ctx = { w, history, path: new Set(), nodes: 0 };
-    let best = null, bestV = -Infinity, alpha = -Infinity;
+    const scored = [];
+    let bestV = -Infinity, best = null;
     for (const m of moves) {
+      // 최선 - margin 보다 나은 수는 정확한 점수가 나오도록 탐색 창을 넓혀 둔다
+      const alpha = bestV - margin;
       const v = -search(applyMove(s, m), depth - 1, -Infinity, -alpha, ctx, 1);
+      scored.push([m, v]);
       if (v > bestV) { bestV = v; best = m; }
-      if (v > alpha) alpha = v;
     }
-    return { move: best, score: bestV, nodes: ctx.nodes };
+
+    if (margin === 0 || bestV >= WIN / 2) return { move: best, score: bestV, nodes: ctx.nodes };
+
+    const pool = scored.filter(([, v]) => v >= bestV - margin && v > -WIN / 2);
+    if (!pool.length) return { move: best, score: bestV, nodes: ctx.nodes };
+    const weights = pool.map(([, v]) => Math.exp((v - bestV) / temp));
+    let x = rng() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < pool.length; i++) {
+      x -= weights[i];
+      if (x <= 0) return { move: pool[i][0], score: pool[i][1], nodes: ctx.nodes };
+    }
+    return { move: pool[pool.length - 1][0], score: pool[pool.length - 1][1], nodes: ctx.nodes };
   }
 
   // 자가 대국 튜닝 최종 가중치 (w3.json, 깊이 4 기준)
@@ -276,6 +301,6 @@
 
   return {
     N, P, E, initial, clone, key, edgeIndex, genMoves, applyMove, features, evaluate,
-    chooseMove, lineCount, FEATURE_NAMES, WEIGHTS, WIN,
+    chooseMove, lineCount, FEATURE_NAMES, WEIGHTS, RANDOMNESS, WIN,
   };
 });

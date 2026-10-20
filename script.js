@@ -12,8 +12,8 @@
   const AI_DELAY = 450;    // 사람이 보기 편하게 두기 전에 잠깐 기다림 (ms)
 
   const DEFAULTS = {
-    1: { name: '플레이어 1', color: '#a3db85' },
-    2: { name: '플레이어 2', color: '#94d6ff' },
+    1: { name: '루시치', color: '#a3db85' },
+    2: { name: '체키메', color: '#94d6ff' },
   };
   const players = {
     1: { ...DEFAULTS[1] },

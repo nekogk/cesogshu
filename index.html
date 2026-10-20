@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>체소쥬</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="game">
+    <div class="players">
+      <div class="player" data-player="1">
+        <label class="swatch" title="색 바꾸기">
+          <input type="color" id="color-1" aria-label="플레이어 1 색">
+        </label>
+        <input class="name" id="name-1" maxlength="10" spellcheck="false" autocomplete="off" aria-label="플레이어 1 이름">
+      </div>
+      <button class="icon-btn" id="restart" type="button" aria-label="새 게임" title="새 게임">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path d="M4 12a8 8 0 1 0 2.4-5.7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="player" data-player="2">
+        <label class="swatch" title="색 바꾸기">
+          <input type="color" id="color-2" aria-label="플레이어 2 색">
+        </label>
+        <input class="name" id="name-2" maxlength="10" spellcheck="false" autocomplete="off" aria-label="플레이어 2 이름">
+      </div>
+    </div>
+
+    <p class="sr-only" id="status" aria-live="polite"></p>
+
+    <div class="board" id="board">
+      <svg class="lines" id="lines" viewBox="0 0 100 100" aria-hidden="true"></svg>
+      <div class="result" id="result" hidden>
+        <p id="result-text"></p>
+        <button class="btn" id="again" type="button">다시 하기</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

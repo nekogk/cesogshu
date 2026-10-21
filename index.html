@@ -38,7 +38,11 @@
       <svg class="lines" id="lines" viewBox="0 0 100 100" aria-hidden="true"></svg>
       <div class="result" id="result" hidden>
         <p id="result-text"></p>
-        <button class="btn" id="again" type="button">다시 하기</button>
+        <div class="sizes" role="group" aria-label="판 크기를 골라 새 게임">
+          <button class="size-btn" type="button" data-size="5" aria-label="5×5로 새 게임">5</button>
+          <button class="size-btn" type="button" data-size="7" aria-label="7×7로 새 게임">7</button>
+          <button class="size-btn" type="button" data-size="9" aria-label="9×9로 새 게임">9</button>
+        </div>
       </div>
     </div>
 

@@ -2,13 +2,23 @@
   'use strict';
 
   /* ── 설정 ── */
-  const N = 5;
-  const MARGIN = 10;                         // 보드 가장자리 여백 (%)
-  const CELL = (100 - 2 * MARGIN) / (N - 1); // 격자 간격 (%)
+  const MARGIN = 10;       // 보드 가장자리 여백 (%)
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  const PROTECTED = new Set(['1,1', '1,3', '3,1', '3,3']); // 초기 보호 점
   const STORE_KEY = 'cesogshu-players';
-  const AI_DEPTH = 4;      // 튜닝할 때와 같은 깊이
+  const SIZE_KEY = 'cesogshu-size';
+
+  // 판 크기별 초기 보호 점 (좌표는 0부터, 행·열)
+  function mirror4(n, list) {           // 한 사분면 배치를 네 사분면으로 복사
+    const out = [];
+    for (const [r, c] of list) out.push([r, c], [r, n - 1 - c], [n - 1 - r, c], [n - 1 - r, n - 1 - c]);
+    return out;
+  }
+  const LAYOUTS = {
+    5: mirror4(5, [[1, 1]]),                  // 원본 체소그슈
+    7: mirror4(7, [[1, 2], [2, 1]]),          // 토바체소그슈
+    9: mirror4(9, [[1, 1], [1, 3], [2, 2], [3, 1], [3, 3]]), // 임시: 사분면마다 ×자
+  };
+  const AI_DEPTHS = { 5: 4, 7: 3, 9: 3 };    // 5×5는 튜닝 때와 같은 깊이, 큰 판은 속도 때문에 3
   const AI_DELAY = 450;    // 사람이 보기 편하게 두기 전에 잠깐 기다림 (ms)
 
   const DEFAULTS = {
@@ -20,11 +30,15 @@
     2: { ...DEFAULTS[2] },
   };
 
+  /* ── 판 크기 ── */
+  let N, CELL, PROTECTED;
+
   /* ── 게임 상태 ── */
   let board, lines, current, recent, hasCaptured;
   let selecting, target, sources, winner;
   let history;             // 지금까지 나온 국면들 (AI가 반복 국면을 피하는 데 사용)
   let aiToken = 0;         // 새 게임·이름 변경 시 예약된 AI 수를 무효화하는 번호
+  let menuOpen = false;    // 새 게임(판 크기) 메뉴가 열려 있는지
 
   /* ── DOM ── */
   const $ = (s) => document.querySelector(s);
@@ -33,6 +47,7 @@
   const statusEl = $('#status');
   const resultEl = $('#result');
   const resultText = $('#result-text');
+  const sizeBtns = [...document.querySelectorAll('.size-btn')];
   const pointEls = [];
 
   /* ── 유틸 ── */
@@ -191,6 +206,8 @@
 
   /* ── 그리기 ── */
   function buildPoints() {
+    pointEls.forEach((el) => el.remove());
+    pointEls.length = 0;
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
         const btn = document.createElement('button');
@@ -209,11 +226,12 @@
   function render() {
     boardEl.dataset.turn = current;
 
-    // 선
+    // 선 (판이 커지면 가늘게)
+    const strokeW = (CELL * 0.075).toFixed(2);
     linesEl.innerHTML = [...lines].map((k) => {
       const [[r1, c1], [r2, c2]] = parseLine(k);
       const owner = board[r1][c1] ?? board[r2][c2];
-      return `<line class="p${owner}" x1="${pos(c1)}" y1="${pos(r1)}" x2="${pos(c2)}" y2="${pos(r2)}"/>`;
+      return `<line class="p${owner}" stroke-width="${strokeW}" x1="${pos(c1)}" y1="${pos(r1)}" x2="${pos(c2)}" y2="${pos(r2)}"/>`;
     }).join('');
 
     // 점
@@ -249,16 +267,47 @@
       statusEl.textContent = `${nameOf(winner)} 승리!`;
       resultText.textContent = `${nameOf(winner)} 승리!`;
       resultText.style.color = players[winner].color;
-      resultEl.hidden = false;
     } else {
       // 화면에는 표시하지 않고, 스크린리더용으로만 알림
       statusEl.textContent = selecting
         ? '연결할 자신의 점을 선택하세요'
         : `${nameOf(current)} 차례`;
-      resultEl.hidden = true;
     }
 
-    if (!winner && isAI(current)) scheduleAI();
+    // 승패가 났거나 새 게임 메뉴를 열었으면 블러 + 판 크기 버튼
+    resultEl.hidden = !(winner || menuOpen);
+    resultText.hidden = !winner;
+    sizeBtns.forEach((b) => b.classList.toggle('current', Number(b.dataset.size) === N));
+
+    if (!winner && !menuOpen && isAI(current)) scheduleAI();
+  }
+
+  function setSize(n) {
+    N = n;
+    CELL = (100 - 2 * MARGIN) / (N - 1);
+    PROTECTED = new Set(LAYOUTS[N].map(([r, c]) => pk(r, c)));
+    boardEl.dataset.size = N;
+    boardEl.style.setProperty('--cell', `${CELL}%`);
+    buildPoints();
+    try { localStorage.setItem(SIZE_KEY, String(N)); } catch (_) {}
+  }
+
+  function openMenu() {
+    if (winner) return;          // 이미 결과 화면에 버튼이 떠 있음
+    menuOpen = true;
+    render();
+  }
+
+  function closeMenu() {
+    if (!menuOpen) return;
+    menuOpen = false;
+    render();
+  }
+
+  function startGame(n) {
+    menuOpen = false;
+    if (n !== N) setSize(n);
+    reset();
   }
 
   function reset() {
@@ -340,22 +389,30 @@
       const [[r1, c1], [r2, c2]] = parseLine(k);
       l[engine.edgeIndex(r1, c1, r2, c2)] = 1;
     }
-    let rec = 0;
-    for (const p of snap.recent) { const [r, c] = p.split(',').map(Number); rec |= 1 << (r * N + c); }
+    const rec = new Uint8Array(N * N);
+    for (const p of snap.recent) { const [r, c] = p.split(',').map(Number); rec[r * N + c] = 1; }
     return { board: b, lines: l, cur: snap.cur, recent: rec, hasCap: snap.hasCap };
   }
 
-  function aiMove(engine, token) {
+  // 판 크기별 엔진 (보호 점 배치가 다르니 크기마다 따로 만듦)
+  const engines = {};
+  function engineFor(base, n) {
+    if (!engines[n]) engines[n] = base.create(n, LAYOUTS[n]);
+    return engines[n];
+  }
+
+  function aiMove(base, token) {
     if (token !== aiToken) {           // 그사이 새 게임이 시작됐거나 이름이 바뀜
       if (!winner && isAI(current)) scheduleAI();
       return;
     }
-    if (winner || !isAI(current)) return;
+    if (winner || menuOpen || !isAI(current)) return; // 메뉴를 닫으면 render에서 다시 예약됨
     selecting = false; target = null; sources = [];
+    const engine = engineFor(base, N);
 
     const state = toEngineState(engine, snapshot());
     const seen = new Set(history.map((h) => engine.key(toEngineState(engine, h))));
-    const res = engine.chooseMove(state, engine.WEIGHTS, AI_DEPTH, seen);
+    const res = engine.chooseMove(state, engine.WEIGHTS, AI_DEPTHS[N], seen);
     if (!res || !res.move) return;
 
     const tr = Math.floor(res.move.t / N), tc = res.move.t % N;
@@ -411,12 +468,18 @@
   loadPlayers();
   applyColors();
   bindPlayerInputs();
-  buildPoints();
+  let savedSize = 5;
+  try { savedSize = Number(localStorage.getItem(SIZE_KEY)) || 5; } catch (_) {}
+  setSize(LAYOUTS[savedSize] ? savedSize : 5);
 
-  $('#restart').addEventListener('click', reset);
-  $('#again').addEventListener('click', reset);
+  $('#restart').addEventListener('click', () => (menuOpen ? closeMenu() : openMenu()));
+  sizeBtns.forEach((b) => b.addEventListener('click', () => startGame(Number(b.dataset.size))));
+  // 메뉴만 열린 상태에서는 블러 바깥(버튼이 아닌 곳)을 누르면 닫힘
+  resultEl.addEventListener('click', (e) => { if (e.target === resultEl) closeMenu(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && selecting) {
+    if (e.key !== 'Escape') return;
+    if (menuOpen) closeMenu();
+    else if (selecting) {
       selecting = false; target = null; sources = [];
       render();
     }

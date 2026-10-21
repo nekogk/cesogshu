@@ -21,16 +21,27 @@
 
   const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // 원본과 같은 순서 (연쇄 먹기 순서에 영향)
 
-  // 자가 대국 튜닝 최종 가중치 (5×5, w3.json, 깊이 4 기준). 7×7, 9×9에도 그대로 씀
-  const WEIGHTS = [3.13, 12.43, -11.67, -7.01, -9.11, -0.03, -1.58, -1.25];
+  // 판 크기별 자가 대국 튜닝 가중치 (특징 순서는 FEATURE_NAMES와 같음)
+  //   5×5: w3.json   (깊이 4, 3번 반복)
+  //   7×7: w7_1.json (깊이 3, W3에서 1번 반복, W3 대비 +51 Elo)
+  //   9×9: w9_1.json (깊이 2, W3에서 1번 반복, W3 대비 +76 Elo, 보호 점은 임시 ×자 배치 기준)
+  const WEIGHTS_BY_SIZE = {
+    5: [3.13, 12.43, -11.67, -7.01, -9.11, -0.03, -1.58, -1.25],
+    7: [-0.01, 3.58, -3.4, -6.49, 4.56, -0.27, 1.06, 1.9],
+    9: [-0.17, 5.27, -5.11, -0.27, 1.22, 0.15, -0.42, 2.35],
+  };
 
   // 약한 랜덤: 최선 수와 점수 차가 margin 이내인 수들 중에서
   // exp((점수 - 최선) / temperature) 비율로 뽑는다. 이기는 수가 보이면 무조건 그 수.
-  // 평가 점수 감각: 둘 수 있는 점 하나 차이 ≈ 12점
+  // 평가 점수 감각(5×5): 둘 수 있는 점 하나 차이 ≈ 12점. 다른 크기는 create에서 비율 맞춤
   const RANDOMNESS = { margin: 4, temperature: 2 };
 
   function create(N, protectedList) {
     const P = N * N;
+    const WEIGHTS = WEIGHTS_BY_SIZE[N] || WEIGHTS_BY_SIZE[5]; // 튜닝 안 된 크기는 5×5 값
+    // 랜덤 폭은 5×5 기준값을 이 크기 가중치의 점수 단위(이동 가능성 가중치)에 맞춰 줄이거나 늘림
+    const unit = Math.abs(WEIGHTS[1]) / Math.abs(WEIGHTS_BY_SIZE[5][1]);
+    const RAND = { margin: RANDOMNESS.margin * unit, temperature: RANDOMNESS.temperature * unit };
     const PROTECTED = new Uint8Array(P);
     for (const [r, c] of protectedList) PROTECTED[r * N + c] = 1;
 
@@ -274,7 +285,7 @@
     //   history: 지금까지 나온 국면 key 집합
     //   rng: 난수 함수
     //   opts: 랜덤 정도. { margin: 0 }을 넘기면 랜덤 없이 최선 수만 (동점끼리만 무작위)
-    function chooseMove(s, w, depth, history, rng = Math.random, opts = RANDOMNESS) {
+    function chooseMove(s, w, depth, history, rng = Math.random, opts = RAND) {
       const moves = genMoves(s);
       if (!moves.length) return null;
       for (let i = moves.length - 1; i > 0; i--) { // 동점 수를 무작위로 고르기 위해 섞음
@@ -310,10 +321,10 @@
 
     return {
       N, P, E, initial, clone, key, edgeIndex, genMoves, applyMove, features, evaluate,
-      chooseMove, lineCount, FEATURE_NAMES, WEIGHTS, RANDOMNESS, WIN,
+      chooseMove, lineCount, FEATURE_NAMES, WEIGHTS, RANDOMNESS: RAND, WIN,
     };
   } // create
 
   // 기본: 5×5 원본 규칙. create로 다른 크기를 만들 수 있다
-  return Object.assign(create(5, [[1, 1], [1, 3], [3, 1], [3, 3]]), { create });
+  return Object.assign(create(5, [[1, 1], [1, 3], [3, 1], [3, 3]]), { create, WEIGHTS_BY_SIZE });
 });
